@@ -21,15 +21,24 @@ app.post("/webhook", async (req, res) => {
 
         const chatId = message.chat.id;
 
-        const username =
-            message.from.username ||
-            `${message.from.first_name || ""} ${message.from.last_name || ""}` ||
-            "unknown";
+        const user = message.from;
+
+        let reporter = "unknown";
+
+        const fullName = `${user.first_name || ""} ${user.last_name || ""}`.trim();
+
+        if (user.username) {
+            reporter = `@${user.username}`;
+        }
+
+        if (fullName) {
+            reporter = `${reporter} (${fullName})`;
+        }
 
         const content = message.text || message.caption;
         if (!content) return res.sendStatus(200);
 
-        console.log("Incoming:", username, content);
+        console.log("Incoming:", reporter, content);
 
         // =========================
         //  SMART TITLE
@@ -105,8 +114,9 @@ app.post("/webhook", async (req, res) => {
             priority,
             status: "OPEN",
             image: imageUrl,
-            reporter: username,
-            date: new Date().toISOString()
+            reporter: reporter,
+            date: new Date().toISOString(),
+
         });
 
         // =========================
