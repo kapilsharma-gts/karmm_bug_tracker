@@ -4,50 +4,108 @@ const axios = require("axios");
 const app = express();
 app.use(express.json());
 
-//  ENV
+// 🔑 ENV
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const SHEET_WEBHOOK = process.env.SHEET_WEBHOOK;
 
-// Health
+// 🟢 Health
 app.get("/", (req, res) => {
-    res.send("Bug Bot Running (Detailed Mode)");
+    res.send("🚀 Bug Bot Running FINAL");
 });
 
-//  WEBHOOK
+// 🔥 WEBHOOK
 app.post("/webhook", async (req, res) => {
     try {
         const message = req.body.message;
         if (!message) return res.sendStatus(200);
 
         const chatId = message.chat.id;
-
         const user = message.from;
 
+        // 👤 REPORTER
         let reporter = "unknown";
-
         const fullName = `${user.first_name || ""} ${user.last_name || ""}`.trim();
 
-        if (user.username) {
-            reporter = `@${user.username}`;
+        if (user.username) reporter = `@${user.username}`;
+        if (fullName) reporter = `${reporter} (${fullName})`;
+
+        const text = message.text || "";
+        const caption = message.caption || "";
+        const content = text || caption;
+
+        // =========================
+        // ✅ DONE
+        // =========================
+        if (text.startsWith("/done")) {
+            const id = text.split(" ")[1];
+
+            await axios.post(SHEET_WEBHOOK, {
+                action: "update",
+                id,
+                status: "DONE"
+            });
+
+            await sendMessage(chatId, `✅ Bug ${id} DONE`);
+            return res.sendStatus(200);
         }
 
-        if (fullName) {
-            reporter = `${reporter} (${fullName})`;
+        // =========================
+        // 🟡 PROGRESS
+        // =========================
+        if (text.startsWith("/progress")) {
+            const id = text.split(" ")[1];
+
+            await axios.post(SHEET_WEBHOOK, {
+                action: "update",
+                id,
+                status: "IN PROGRESS"
+            });
+
+            await sendMessage(chatId, `🟡 Bug ${id} IN PROGRESS`);
+            return res.sendStatus(200);
         }
 
-        const content = message.text || message.caption;
+        // =========================
+        // 🔴 DELETE
+        // =========================
+        if (text.startsWith("/delete")) {
+            const id = text.split(" ")[1];
+
+            await axios.post(SHEET_WEBHOOK, {
+                action: "delete",
+                id
+            });
+
+            await sendMessage(chatId, `🗑️ Bug ${id} deleted`);
+            return res.sendStatus(200);
+        }
+
+        // =========================
+        // 👤 ASSIGN
+        // =========================
+        if (text.startsWith("/assign")) {
+            const parts = text.split(" ");
+            const id = parts[1];
+            const assignee = parts[2];
+
+            await axios.post(SHEET_WEBHOOK, {
+                action: "assign",
+                id,
+                assignee
+            });
+
+            await sendMessage(chatId, `👤 Bug ${id} assigned to ${assignee}`);
+            return res.sendStatus(200);
+        }
+
+        // =========================
+        // 🧠 CREATE BUG
+        // =========================
         if (!content) return res.sendStatus(200);
 
-        console.log("Incoming:", reporter, content);
-
-        // =========================
-        //  SMART TITLE
-        // =========================
         let title = content.split("\n")[0];
+        let description = content;
 
-        // =========================
-        //  PRIORITY AUTO
-        // =========================
         let priority = "MEDIUM";
         const lower = content.toLowerCase();
 
@@ -64,27 +122,11 @@ app.post("/webhook", async (req, res) => {
             priority = "LOW";
         }
 
-        //  Description (FULL message)
-        let description = content;
-
-        // =========================
-        // AUTO STEPS
-        // =========================
-        let steps = `1. Open app\n2. Perform action related to "${title}"\n3. Observe issue`;
-
-        // =========================
-        //  EXPECTED
-        // =========================
-        let expected = `Feature should work correctly without errors`;
-
-        // =========================
-        //  ACTUAL
-        // =========================
+        let steps = `1. Open app\n2. Perform "${title}"\n3. Observe issue`;
+        let expected = `Feature should work correctly`;
         let actual = `${title} issue occurring`;
 
-        // =========================
-        //  IMAGE
-        // =========================
+        // 📸 IMAGE
         let imageUrl = "";
 
         if (message.photo) {
@@ -94,16 +136,12 @@ app.post("/webhook", async (req, res) => {
                 `https://api.telegram.org/bot${TELEGRAM_TOKEN}/getFile?file_id=${fileId}`
             );
 
-            const filePath = fileRes.data.result.file_path;
-
-            imageUrl = `https://api.telegram.org/file/bot${TELEGRAM_TOKEN}/${filePath}`;
+            imageUrl = `https://api.telegram.org/file/bot${TELEGRAM_TOKEN}/${fileRes.data.result.file_path}`;
         }
 
-        // =========================
-        // SEND TO SHEET
-        // =========================
         const bugId = Date.now();
 
+        // 🟢 SAVE
         await axios.post(SHEET_WEBHOOK, {
             id: bugId,
             title,
@@ -114,44 +152,37 @@ app.post("/webhook", async (req, res) => {
             priority,
             status: "OPEN",
             image: imageUrl,
-            reporter: reporter,
-            date: new Date().toISOString(),
-
+            reporter,
+            date: new Date().toISOString()
         });
 
-        // =========================
-        //  TELEGRAM RESPONSE
-        // =========================
+        // 📩 RESPONSE
         await sendMessage(
             chatId,
-            `Bug Created!
+            `✅ Bug Created!
 
-ID: ${bugId}
- ${title}
- ${priority}
- Status: OPEN`
+🆔 ${bugId}
+📝 ${title}
+🔥 ${priority}
+👤 ${reporter}
+📌 OPEN`
         );
 
         res.sendStatus(200);
+
     } catch (err) {
-        console.error("Error:", err.message);
+        console.error(err.message);
         res.sendStatus(500);
     }
 });
 
-//  SEND MESSAGE
+// 📩 SEND MESSAGE
 async function sendMessage(chatId, text) {
     await axios.post(
         `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`,
-        {
-            chat_id: chatId,
-            text
-        }
+        { chat_id: chatId, text }
     );
 }
 
-// START
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log("Server Running");
-});
+// 🚀 START
+app.listen(process.env.PORT || 3000);
