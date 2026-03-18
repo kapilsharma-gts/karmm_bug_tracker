@@ -55,10 +55,8 @@ app.post("/webhook", async (req, res) => {
             priority = "LOW";
         }
 
-        // =========================
-        // AUTO DESCRIPTION
-        // =========================
-        let description = `User reported issue: ${title}`;
+        //  Description (FULL message)
+        let description = content;
 
         // =========================
         // AUTO STEPS
