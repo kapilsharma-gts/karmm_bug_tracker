@@ -19,7 +19,10 @@ class TrelloIssueGateway {
 
     async markDone(issueId) {
         const cardId = await this.getCardId(issueId);
-        if (!cardId) return;
+        if (!cardId) {
+            console.warn(`⚠️ Trello card not found for issue ${issueId} (markDone)`);
+            return;
+        }
 
         await this.httpClient.put(
             `${this.baseUrl}/cards/${cardId}?${this.getAuthParams()}`,
@@ -31,7 +34,10 @@ class TrelloIssueGateway {
 
     async markInProgress(issueId) {
         const cardId = await this.getCardId(issueId);
-        if (!cardId) return;
+        if (!cardId) {
+            console.warn(`⚠️ Trello card not found for issue ${issueId} (markInProgress)`);
+            return;
+        }
 
         await this.httpClient.put(
             `${this.baseUrl}/cards/${cardId}?${this.getAuthParams()}`,
@@ -43,7 +49,10 @@ class TrelloIssueGateway {
 
     async markOpen(issueId) {
         const cardId = await this.getCardId(issueId);
-        if (!cardId) return;
+        if (!cardId) {
+            console.warn(`⚠️ Trello card not found for issue ${issueId} (markOpen)`);
+            return;
+        }
 
         await this.httpClient.put(
             `${this.baseUrl}/cards/${cardId}?${this.getAuthParams()}`,
@@ -55,7 +64,10 @@ class TrelloIssueGateway {
 
     async markInReview(issueId) {
         const cardId = await this.getCardId(issueId);
-        if (!cardId) return;
+        if (!cardId) {
+            console.warn(`⚠️ Trello card not found for issue ${issueId} (markInReview)`);
+            return;
+        }
 
         await this.httpClient.put(
             `${this.baseUrl}/cards/${cardId}?${this.getAuthParams()}`,
@@ -281,6 +293,14 @@ class TrelloIssueGateway {
                 );
                 if (titleMatch) {
                     return titleMatch.id;
+                }
+
+                const looseTitleMatch = cards.find((card) => {
+                    const cardName = this.normalizeTextForMatch(card.name || "");
+                    return cardName.includes(expectedNormalized) || expectedNormalized.includes(cardName);
+                });
+                if (looseTitleMatch) {
+                    return looseTitleMatch.id;
                 }
             }
 

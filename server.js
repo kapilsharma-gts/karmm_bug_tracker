@@ -57,6 +57,23 @@ app.get("/", (req, res) => {
     res.send("Bug Bot Running");
 });
 
+// Trello validates callback URL with HEAD/GET before webhook creation.
+app.head("/webhook/trello-sync", (req, res) => {
+    return res.sendStatus(200);
+});
+
+app.get("/webhook/trello-sync", (req, res) => {
+    return res.status(200).send("Trello sync webhook endpoint is active");
+});
+
+app.head("/webhook/sheet-sync", (req, res) => {
+    return res.sendStatus(200);
+});
+
+app.get("/webhook/sheet-sync", (req, res) => {
+    return res.status(200).send("Sheet sync webhook endpoint is active");
+});
+
 app.post("/webhook", async (req, res) => {
     try {
         const message = req.body.message;
