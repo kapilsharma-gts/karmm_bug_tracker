@@ -29,12 +29,16 @@ class TrelloSyncWebhookController {
             "in review": "IN REVIEW",
             "bug not resolved": "BUG NOT RESOLVED",
             "future update": "FUTURE UPDATE",
+            "future updates": "FUTURE UPDATE",
+            "future": "FUTURE UPDATE",
             "done": "DONE",
             "completed": "DONE",
             "closed": "DONE"
         };
 
-        return nameMap[normalized] || null;
+        const resolvedStatus = nameMap[normalized] || null;
+        console.log(`[TrelloSync] Resolved status for list name '${listName}': ${resolvedStatus}`);
+        return resolvedStatus;
     }
 
     async processTrelloWebhook(webhookData) {
@@ -53,16 +57,26 @@ class TrelloSyncWebhookController {
         if (action.type === 'updateCard' && action.data.card) {
             const card = action.data.card;
             const newListId = card.idList;
-            const status =
-                this.listStatusMap[newListId] ||
-                this.resolveStatusFromListName(action.data.listAfter && action.data.listAfter.name);
+            
+            // Try to resolve using explicit map, then fallback to testing the list name in payload
+            const listAfterName = action.data.listAfter ? action.data.listAfter.name : (action.data.list ? action.data.list.name : "");
+            
+            let status = this.listStatusMap[newListId];
+            if (!status) {
+                status = this.resolveStatusFromListName(listAfterName);
+            }
+
+            console.log(`[TrelloSync] updateCard action for card '${card.name}' (List ID: ${newListId}, List Name: '${listAfterName}', Evaluated Status: ${status})`);
 
             if (status) {
                 const issueId = await this.resolveIssueId(card);
 
                 if (issueId) {
+                    console.log(`[TrelloSync] Updating sheet for issue ${issueId} to status ${status}`);
                     await this.sheetGateway.markWithStatus(issueId, status);
                     console.log(`✅ Synced Trello card '${card.name}' (${issueId}) to status: ${status}`);
+                } else {
+                    console.log(`[TrelloSync] Failed to resolve issue ID for card '${card.name}'`);
                 }
             }
         }

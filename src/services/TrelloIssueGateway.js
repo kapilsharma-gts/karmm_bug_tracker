@@ -222,7 +222,7 @@ class TrelloIssueGateway {
     }
 
     async getFutureUpdateListId() {
-        return await this.getListIdByAnyName(["Future Update", "Future", "Planned", "Later"]);
+        return await this.getListIdByAnyName(["Future Update", "Future Updates", "Future", "Planned", "Later"]);
     }
 
     getLabelColor(priority) {

@@ -102,6 +102,12 @@ app.post("/webhook/trello-sync", async (req, res) => {
             return res.sendStatus(200);
         }
 
+        // Add logging to monitor incoming requests
+        if (webhookData.action && webhookData.action.type === 'updateCard' && webhookData.action.data.card) {
+            const listName = webhookData.action.data.listAfter ? webhookData.action.data.listAfter.name : "N/A";
+            console.log(`[Webhook] Trello card updated: '${webhookData.action.data.card.name}' moved to list: ${webhookData.action.data.card.idList} (${listName})`);
+        }
+
         await syncControllers.trelloSync.processTrelloWebhook(webhookData);
         return res.sendStatus(200);
     } catch (error) {
@@ -121,6 +127,8 @@ app.post("/webhook/sheet-sync", async (req, res) => {
         if (!webhookData || !webhookData.action) {
             return res.sendStatus(200);
         }
+
+        console.log(`[Webhook] Google Sheet update received: Action='${webhookData.action}', IssueID='${webhookData.id}', Status='${webhookData.status}'`);
 
         const handled = await syncControllers.sheetSync.processSheetWebhook(webhookData);
         return res.sendStatus(200);

@@ -5,6 +5,92 @@
 // 📡 WEBHOOK CONFIG - Update this with your bot server URL
 const BOT_SERVER_URL = "https://karmm-bug-tracker.onrender.com"; // Change this to your bot server
 
+function normalizeStatusValue(status) {
+  const raw = String(status || "")
+    .replace(/\u00A0/g, " ")
+    .replace(/[\-_]+/g, " ")
+    .replace(/[.,;:!?]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase();
+
+  const statusMap = {
+    "OPEN": "OPEN",
+    "TODO": "OPEN",
+    "TO DO": "OPEN",
+    "IN PROGRESS": "IN PROGRESS",
+    "IN DEVELOPMENT": "IN PROGRESS",
+    "DOING": "IN PROGRESS",
+    "IN REVIEW": "IN REVIEW",
+    "REVIEW": "IN REVIEW",
+    "BUG NOT RESOLVED": "BUG NOT RESOLVED",
+    "BUG-NOT-RESOLVED": "BUG NOT RESOLVED",
+    "FUTURE UPDATE": "FUTURE UPDATE",
+    "FUTURE UPDATES": "FUTURE UPDATE",
+    "FUTRER UPDATE": "FUTURE UPDATE",
+    "FUTUER UPDATE": "FUTURE UPDATE",
+    "FUTURE": "FUTURE UPDATE",
+    "DONE": "DONE"
+  };
+
+  return statusMap[raw] || raw;
+}
+
+function getStatusStyle(status) {
+  const normalized = normalizeStatusValue(status);
+  const styleMap = {
+    "OPEN": { bg: "#2563eb", fg: "#ffffff" },
+    "IN PROGRESS": { bg: "#0ea5e9", fg: "#ffffff" },
+    "IN REVIEW": { bg: "#7c3aed", fg: "#ffffff" },
+    "BUG NOT RESOLVED": { bg: "#ea580c", fg: "#ffffff" },
+    "BUG-NOT-RESOLVED": { bg: "#ea580c", fg: "#ffffff" },
+    "FUTURE UPDATE": { bg: "#334155", fg: "#ffffff" },
+    "DONE": { bg: "#16a34a", fg: "#ffffff" }
+  };
+
+  return styleMap[normalized] || null;
+}
+
+function applyStatusCellStyle(sheet, row, statusValue) {
+  const statusCol = getColumnIndexByHeader(sheet, "Status", 8);
+  const statusCell = sheet.getRange(row, statusCol);
+  const style = getStatusStyle(statusValue);
+  if (!style) {
+    // Reset to default when status is unknown.
+    statusCell.setBackground(null);
+    statusCell.setFontColor("#111827");
+    statusCell.setFontWeight("normal");
+    return;
+  }
+
+  statusCell.setBackground(style.bg);
+  statusCell.setFontColor(style.fg);
+  statusCell.setFontWeight("bold");
+}
+
+function normalizeAndStyleStatusColumn(sheet) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+    return;
+  }
+
+  const statusCol = getColumnIndexByHeader(sheet, "Status", 8);
+  const statusRange = sheet.getRange(2, statusCol, lastRow - 1, 1);
+  const statusValues = statusRange.getValues();
+
+  for (let i = 0; i < statusValues.length; i++) {
+    const normalized = normalizeStatusValue(statusValues[i][0]);
+    statusValues[i][0] = normalized;
+  }
+
+  statusRange.setValues(statusValues);
+
+  for (let i = 0; i < statusValues.length; i++) {
+    const row = i + 2;
+    applyStatusCellStyle(sheet, row, statusValues[i][0]);
+  }
+}
+
 function getColumnIndexByHeader(sheet, headerName, fallbackIndex) {
   const headers = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), 14)).getValues()[0];
   const target = String(headerName || "").trim().toLowerCase();
@@ -91,6 +177,17 @@ function fixExistingChatIdPreviewColumns() {
   return "✅ Chat ID / Preview columns repaired";
 }
 
+function fixExistingStatusColors() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Bugs");
+  if (!sheet) {
+    return "Sheet not found";
+  }
+
+  normalizeAndStyleStatusColumn(sheet);
+  beautifyDashboard(sheet);
+  return "✅ Status values normalized and colors repaired";
+}
+
 /**
  * Initialize sheet headers - Run this once
  */
@@ -148,16 +245,19 @@ function doPost(e) {
   // 🔄 UPDATE STATUS
   // =========================
   if (data.action === "update") {
+    const normalizedStatus = normalizeStatusValue(data.status);
+
     for (let i = 1; i < rows.length; i++) {
       if (rows[i][0] == data.id) {
-        sheet.getRange(i + 1, 8).setValue(data.status);
+        sheet.getRange(i + 1, 8).setValue(normalizedStatus);
+        applyStatusCellStyle(sheet, i + 1, normalizedStatus);
         beautifyDashboard(sheet);
         
         // 📡 Send webhook to bot server for Trello sync
         sendWebhookToBot({
           action: "update",
           id: data.id,
-          status: data.status
+          status: normalizedStatus
         });
         
         return ContentService.createTextOutput("Updated");
@@ -221,7 +321,7 @@ function doPost(e) {
     data.expected,
     data.actual,
     data.priority,
-    data.status,
+    normalizeStatusValue(data.status),
     data.image,
     data.reporter,
     data.date,
@@ -274,6 +374,9 @@ function sendWebhookToBot(payload) {
 function beautifyDashboard(sheet) {
   const lastRow = sheet.getLastRow();
   const lastCol = 14;
+  const priorityCol = getColumnIndexByHeader(sheet, "Priority", 7);
+  const statusCol = getColumnIndexByHeader(sheet, "Status", 8);
+  const dataRowCount = Math.max(sheet.getMaxRows() - 1, 1);
 
   // Freeze header
   sheet.setFrozenRows(1);
@@ -297,10 +400,15 @@ function beautifyDashboard(sheet) {
   sheet.setColumnWidth(13, 150);
   sheet.setColumnWidth(14, 250);
 
-  // Row banding
-  sheet.getRange(2, 1, lastRow).applyRowBanding(
-    SpreadsheetApp.BandingTheme.LIGHT_GREY
-  );
+  if (lastRow > 1) {
+    // Row banding for data rows only.
+    sheet.getRange(2, 1, lastRow - 1, lastCol).applyRowBanding(
+      SpreadsheetApp.BandingTheme.LIGHT_GREY
+    );
+  }
+
+  // Normalize and re-style status values so old rows also get correct color.
+  normalizeAndStyleStatusColumn(sheet);
 
   // Conditional formatting
   const rules = [];
@@ -311,7 +419,7 @@ function beautifyDashboard(sheet) {
       .whenTextEqualTo("CRITICAL")
       .setBackground("#7f1d1d")
       .setFontColor("#ffffff")
-      .setRanges([sheet.getRange("G2:G")])
+      .setRanges([sheet.getRange(2, priorityCol, dataRowCount, 1)])
       .build()
   );
 
@@ -320,7 +428,7 @@ function beautifyDashboard(sheet) {
       .whenTextEqualTo("HIGH")
       .setBackground("#dc2626")
       .setFontColor("#ffffff")
-      .setRanges([sheet.getRange("G2:G")])
+      .setRanges([sheet.getRange(2, priorityCol, dataRowCount, 1)])
       .build()
   );
 
@@ -329,7 +437,7 @@ function beautifyDashboard(sheet) {
       .whenTextEqualTo("MEDIUM")
       .setBackground("#f59e0b")
       .setFontColor("#111827")
-      .setRanges([sheet.getRange("G2:G")])
+      .setRanges([sheet.getRange(2, priorityCol, dataRowCount, 1)])
       .build()
   );
 
@@ -338,7 +446,7 @@ function beautifyDashboard(sheet) {
       .whenTextEqualTo("LOW")
       .setBackground("#10b981")
       .setFontColor("#ffffff")
-      .setRanges([sheet.getRange("G2:G")])
+      .setRanges([sheet.getRange(2, priorityCol, dataRowCount, 1)])
       .build()
   );
 
@@ -348,7 +456,7 @@ function beautifyDashboard(sheet) {
       .whenTextEqualTo("OPEN")
       .setBackground("#2563eb")
       .setFontColor("#ffffff")
-      .setRanges([sheet.getRange("H2:H")])
+      .setRanges([sheet.getRange(2, statusCol, dataRowCount, 1)])
       .build()
   );
 
@@ -357,7 +465,7 @@ function beautifyDashboard(sheet) {
       .whenTextEqualTo("IN PROGRESS")
       .setBackground("#0ea5e9")
       .setFontColor("#ffffff")
-      .setRanges([sheet.getRange("H2:H")])
+      .setRanges([sheet.getRange(2, statusCol, dataRowCount, 1)])
       .build()
   );
 
@@ -366,7 +474,7 @@ function beautifyDashboard(sheet) {
       .whenTextEqualTo("IN DEVELOPMENT")
       .setBackground("#0ea5e9")
       .setFontColor("#ffffff")
-      .setRanges([sheet.getRange("H2:H")])
+      .setRanges([sheet.getRange(2, statusCol, dataRowCount, 1)])
       .build()
   );
 
@@ -375,7 +483,7 @@ function beautifyDashboard(sheet) {
       .whenTextEqualTo("DOING")
       .setBackground("#0ea5e9")
       .setFontColor("#ffffff")
-      .setRanges([sheet.getRange("H2:H")])
+      .setRanges([sheet.getRange(2, statusCol, dataRowCount, 1)])
       .build()
   );
 
@@ -384,7 +492,7 @@ function beautifyDashboard(sheet) {
       .whenTextEqualTo("IN REVIEW")
       .setBackground("#7c3aed")
       .setFontColor("#ffffff")
-      .setRanges([sheet.getRange("H2:H")])
+      .setRanges([sheet.getRange(2, statusCol, dataRowCount, 1)])
       .build()
   );
 
@@ -393,7 +501,7 @@ function beautifyDashboard(sheet) {
       .whenTextEqualTo("BUG NOT RESOLVED")
       .setBackground("#ea580c")
       .setFontColor("#ffffff")
-      .setRanges([sheet.getRange("H2:H")])
+      .setRanges([sheet.getRange(2, statusCol, dataRowCount, 1)])
       .build()
   );
 
@@ -402,7 +510,7 @@ function beautifyDashboard(sheet) {
       .whenTextEqualTo("FUTURE UPDATE")
       .setBackground("#334155")
       .setFontColor("#ffffff")
-      .setRanges([sheet.getRange("H2:H")])
+      .setRanges([sheet.getRange(2, statusCol, dataRowCount, 1)])
       .build()
   );
 
@@ -411,7 +519,7 @@ function beautifyDashboard(sheet) {
       .whenTextEqualTo("DONE")
       .setBackground("#16a34a")
       .setFontColor("#ffffff")
-      .setRanges([sheet.getRange("H2:H")])
+      .setRanges([sheet.getRange(2, statusCol, dataRowCount, 1)])
       .build()
   );
 
@@ -423,7 +531,9 @@ function beautifyDashboard(sheet) {
   }
 
   // Alignment
-  sheet.getRange(2, 1, lastRow, lastCol).setVerticalAlignment("middle");
+  if (lastRow > 1) {
+    sheet.getRange(2, 1, lastRow - 1, lastCol).setVerticalAlignment("middle");
+  }
 }
 
 // =========================
@@ -437,13 +547,18 @@ function onEdit(e) {
     return;
   }
 
-  // Column H is Status (column 8)
-  if (e.range.getColumn() === 8) {
+  const statusCol = getColumnIndexByHeader(sheet, "Status", 8);
+
+  // Only handle edits in Status column.
+  if (e.range.getColumn() === statusCol) {
     const row = e.range.getRow();
     const issueId = sheet.getRange(row, 1).getValue(); // Get ID from column A
-    const newStatus = e.value; // New status value
+    const newStatus = normalizeStatusValue(e.value); // New status value
 
     if (issueId && newStatus) {
+      // Keep sheet values standardized so formatting rules always match.
+      sheet.getRange(row, statusCol).setValue(newStatus);
+      applyStatusCellStyle(sheet, row, newStatus);
       console.log(`Status changed for issue ${issueId} to ${newStatus}`);
       
       // Send webhook
