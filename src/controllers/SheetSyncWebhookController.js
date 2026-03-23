@@ -29,9 +29,9 @@ class SheetSyncWebhookController {
                 await this.trelloGateway.markInReview(id);
                 console.log(`✅ Synced Sheet issue ${id} to Trello: IN REVIEW`);
             } else if (normalizedStatus === 'BUG NOT RESOLVED') {
-                // Rejected from review; send it back to development list.
-                await this.trelloGateway.markInProgress(id);
-                console.log(`✅ Synced Sheet issue ${id} to Trello: BUG NOT RESOLVED -> IN PROGRESS`);
+                // Bug not resolved - move to "Bug Not Resolved" list
+                await this.trelloGateway.markBugNotResolved(id);
+                console.log(`✅ Synced Sheet issue ${id} to Trello: BUG NOT RESOLVED`);
             } else if (normalizedStatus === 'FUTURE UPDATE' || normalizedStatus === 'FUTURE') {
                 await this.trelloGateway.markFutureUpdate(id);
                 console.log(`✅ Synced Sheet issue ${id} to Trello: FUTURE UPDATE`);

@@ -402,9 +402,20 @@ function beautifyDashboard(sheet) {
 
   if (lastRow > 1) {
     // Row banding for data rows only.
-    sheet.getRange(2, 1, lastRow - 1, lastCol).applyRowBanding(
-      SpreadsheetApp.BandingTheme.LIGHT_GREY
-    );
+    try {
+      // Clear existing banding first
+      const bandedRanges = sheet.getBandings();
+      for (let i = 0; i < bandedRanges.length; i++) {
+        bandedRanges[i].remove();
+      }
+      
+      // Apply fresh banding
+      sheet.getRange(2, 1, lastRow - 1, lastCol).applyRowBanding(
+        SpreadsheetApp.BandingTheme.LIGHT_GREY
+      );
+    } catch (error) {
+      console.log("⚠️ Banding error (skipping):", error.toString());
+    }
   }
 
   // Normalize and re-style status values so old rows also get correct color.
@@ -540,36 +551,46 @@ function beautifyDashboard(sheet) {
 // 🔔 ONCHANGE TRIGGER (Optional - for direct cell changes)
 // =========================
 function onEdit(e) {
-  const sheet = e.source.getActiveSheet();
-  
-  // Only handle "Bugs" sheet
-  if (sheet.getName() !== "Bugs") {
+  // Safety check: onEdit must be called with event object
+  if (!e || !e.source) {
+    console.log("⚠️ onEdit called without proper event object - skipping");
     return;
   }
 
-  const statusCol = getColumnIndexByHeader(sheet, "Status", 8);
-
-  // Only handle edits in Status column.
-  if (e.range.getColumn() === statusCol) {
-    const row = e.range.getRow();
-    const issueId = sheet.getRange(row, 1).getValue(); // Get ID from column A
-    const newStatus = normalizeStatusValue(e.value); // New status value
-
-    if (issueId && newStatus) {
-      // Keep sheet values standardized so formatting rules always match.
-      sheet.getRange(row, statusCol).setValue(newStatus);
-      applyStatusCellStyle(sheet, row, newStatus);
-      console.log(`Status changed for issue ${issueId} to ${newStatus}`);
-      
-      // Send webhook
-      sendWebhookToBot({
-        action: "update",
-        id: issueId,
-        status: newStatus
-      });
-
-      // Beautify after change
-      beautifyDashboard(sheet);
+  try {
+    const sheet = e.source.getActiveSheet();
+    
+    // Only handle "Bugs" sheet
+    if (sheet.getName() !== "Bugs") {
+      return;
     }
+
+    const statusCol = getColumnIndexByHeader(sheet, "Status", 8);
+
+    // Only handle edits in Status column.
+    if (e.range.getColumn() === statusCol) {
+      const row = e.range.getRow();
+      const issueId = sheet.getRange(row, 1).getValue(); // Get ID from column A
+      const newStatus = normalizeStatusValue(e.value); // New status value
+
+      if (issueId && newStatus) {
+        // Keep sheet values standardized so formatting rules always match.
+        sheet.getRange(row, statusCol).setValue(newStatus);
+        applyStatusCellStyle(sheet, row, newStatus);
+        console.log(`Status changed for issue ${issueId} to ${newStatus}`);
+        
+        // Send webhook
+        sendWebhookToBot({
+          action: "update",
+          id: issueId,
+          status: newStatus
+        });
+
+        // Beautify after change
+        beautifyDashboard(sheet);
+      }
+    }
+  } catch (error) {
+    console.log("❌ onEdit error:", error.toString());
   }
 }
