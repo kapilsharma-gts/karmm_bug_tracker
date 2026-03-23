@@ -18,7 +18,8 @@ class TelegramIssueWebhookController {
 
     async processIncomingMessage(telegramMessage) {
         const chatIdentifier = telegramMessage.chat.id;
-        const reporterIdentity = TelegramReporterIdentity.composeReporter(telegramMessage.from);
+        const reporterIdentity = TelegramReporterIdentity.composeReporter(telegramMessage.from || {});
+        const isWebhookAutomation = this.isWebhookAutomationMessage(telegramMessage);
 
         const { messageText, consolidatedContent } = TelegramIncomingContent.parse(telegramMessage);
         const authorizedUserRecords = this.loadAuthorizedUsers();
@@ -28,11 +29,9 @@ class TelegramIssueWebhookController {
             return;
         }
 
-        const isAuthorizedReporter = this.isAuthorizedReporter(
-            telegramMessage,
-            reporterIdentity,
-            authorizedUserRecords
-        );
+        const isAuthorizedReporter = isWebhookAutomation
+            ? true
+            : this.isAuthorizedReporter(telegramMessage, reporterIdentity, authorizedUserRecords);
 
         if (!isAuthorizedReporter) {
             const accessDeniedMessage = this.composeAccessDeniedMessage(
@@ -52,7 +51,9 @@ class TelegramIssueWebhookController {
             return;
         }
 
-        this.upsertUserChatMapping(telegramMessage, reporterIdentity, chatIdentifier);
+        if (!isWebhookAutomation) {
+            this.upsertUserChatMapping(telegramMessage, reporterIdentity, chatIdentifier);
+        }
 
         const commandExecutionContext = new IssueCommandExecutionContext({
             chatIdentifier,
@@ -83,6 +84,21 @@ class TelegramIssueWebhookController {
             chatIdentifier,
             `✅ Bug ID: ${issuePayload.id}\n🙏 Thanks for your bug submission to KARMM. We appreciate your contribution. We will resolve this and notify you soon.`
         );
+    }
+
+    isWebhookAutomationMessage(telegramMessage) {
+        const from = telegramMessage.from || {};
+
+        // Internal webhook/bot-originated updates should bypass manual user access checks.
+        if (from.is_bot === true) {
+            return true;
+        }
+
+        if (!from.id && !from.username && !from.first_name && !from.last_name) {
+            return true;
+        }
+
+        return false;
     }
 
     loadAuthorizedUsers() {
