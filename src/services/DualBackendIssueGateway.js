@@ -33,10 +33,23 @@ class DualBackendIssueGateway {
     }
 
     async createIssue(issuePayload) {
-        const sheetPromise = this.sheetGateway ? this.sheetGateway.createIssue(issuePayload) : Promise.resolve();
-        const trelloPromise = this.trelloGateway ? this.trelloGateway.createIssue(issuePayload) : Promise.resolve();
+        const settlements = await Promise.allSettled([
+            this.sheetGateway ? this.sheetGateway.createIssue(issuePayload) : Promise.resolve(),
+            this.trelloGateway ? this.trelloGateway.createIssue(issuePayload) : Promise.resolve()
+        ]);
 
-        await Promise.all([sheetPromise, trelloPromise]);
+        const [sheetResult, trelloResult] = settlements;
+        const sheetOk = sheetResult.status === "fulfilled";
+        const trelloOk = trelloResult.status === "fulfilled";
+
+        if (!sheetOk && !trelloOk) {
+            throw new Error("Failed to create issue in both Sheet and Trello backends");
+        }
+
+        return {
+            sheetCreated: sheetOk,
+            trelloCreated: trelloOk
+        };
     }
 
     async updateIssueChatId(issueId, chatId) {
