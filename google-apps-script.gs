@@ -246,19 +246,25 @@ function doPost(e) {
   // =========================
   if (data.action === "update") {
     const normalizedStatus = normalizeStatusValue(data.status);
+    const updateSource = String(data.source || "").trim().toLowerCase();
 
     for (let i = 1; i < rows.length; i++) {
       if (rows[i][0] == data.id) {
         sheet.getRange(i + 1, 8).setValue(normalizedStatus);
         applyStatusCellStyle(sheet, i + 1, normalizedStatus);
-        beautifyDashboard(sheet);
+        // Avoid full dashboard restyle on every status webhook update.
+        // This keeps color updates stable and prevents visual flicker.
         
-        // 📡 Send webhook to bot server for Trello sync
-        sendWebhookToBot({
-          action: "update",
-          id: data.id,
-          status: normalizedStatus
-        });
+        // Prevent sync loop: updates originating from Trello should not be re-sent.
+        if (updateSource !== "trello") {
+          // 📡 Send webhook to bot server for Trello sync
+          sendWebhookToBot({
+            action: "update",
+            id: data.id,
+            status: normalizedStatus,
+            source: "sheet"
+          });
+        }
         
         return ContentService.createTextOutput("Updated");
       }
@@ -274,7 +280,6 @@ function doPost(e) {
     for (let i = 1; i < rows.length; i++) {
       if (rows[i][0] == data.id) {
         sheet.getRange(i + 1, chatIdColumn).setValue(data.chatId);
-        beautifyDashboard(sheet);
         return ContentService.createTextOutput("Chat ID linked");
       }
     }
@@ -287,7 +292,6 @@ function doPost(e) {
     for (let i = 1; i < rows.length; i++) {
       if (rows[i][0] == data.id) {
         sheet.getRange(i + 1, 12).setValue(data.assignee);
-        beautifyDashboard(sheet);
         return ContentService.createTextOutput("Assigned");
       }
     }
@@ -583,11 +587,9 @@ function onEdit(e) {
         sendWebhookToBot({
           action: "update",
           id: issueId,
-          status: newStatus
+          status: newStatus,
+          source: "sheet"
         });
-
-        // Beautify after change
-        beautifyDashboard(sheet);
       }
     }
   } catch (error) {

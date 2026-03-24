@@ -38,7 +38,8 @@ class SheetIssueGateway {
         await this.httpClient.post(this.sheetWebhookUrl, {
             action: "update",
             id: issueId,
-            status: normalizedStatus
+            status: normalizedStatus,
+            source: "trello"
         });
     }
 
