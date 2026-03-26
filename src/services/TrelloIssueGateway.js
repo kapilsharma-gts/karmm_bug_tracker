@@ -497,6 +497,23 @@ class TrelloIssueGateway {
         return "bin";
     }
 
+    async getCardAttachmentUrl(cardId) {
+        try {
+            const response = await this.httpClient.get(
+                `${this.baseUrl}/cards/${cardId}/attachments?${this.getAuthParams()}`
+            );
+            const attachments = response.data || [];
+            // Prefer image attachments, fallback to first attachment
+            const imageAttachment = attachments.find(a =>
+                a.mimeType && a.mimeType.startsWith("image/")
+            ) || attachments[0];
+            return imageAttachment ? (imageAttachment.url || imageAttachment.previews?.[0]?.url || null) : null;
+        } catch (error) {
+            console.error(`[TrelloGateway] Failed to fetch attachments for card ${cardId}:`, error.message);
+            return null;
+        }
+    }
+
     async getListIdByAnyName(candidateNames) {
         const response = await this.httpClient.get(
             `${this.baseUrl}/boards/${this.boardId}/lists?${this.getAuthParams()}`

@@ -3,7 +3,7 @@
  */
 
 // 📡 WEBHOOK CONFIG
-const BOT_SERVER_URL = "https://karmm-bug-tracker.onrender.com"; 
+const BOT_SERVER_URL = "https://telegrambotbugs.karmm.com"; 
 
 function normalizeStatusValue(status) {
   const raw = String(status || "")
@@ -157,26 +157,6 @@ function doPost(e) {
             sendWebhookToBot({ action: "update", id: data.id, status: normalizedStatus, source: "sheet" });
           }
           return ContentService.createTextOutput("Updated");
-        }
-      }
-    }
-    
-    // Update Title
-    if (data.action === "updateTitle") {
-      for (let i = 1; i < rows.length; i++) {
-        if (rows[i][0] == data.id) {
-          sheet.getRange(i + 1, 2).setValue(data.title);
-          return ContentService.createTextOutput("Title Updated");
-        }
-      }
-    }
-
-    // Update Description
-    if (data.action === "updateDescription") {
-      for (let i = 1; i < rows.length; i++) {
-        if (rows[i][0] == data.id) {
-          sheet.getRange(i + 1, 3).setValue(data.description);
-          return ContentService.createTextOutput("Description Updated");
         }
       }
     }

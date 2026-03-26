@@ -228,40 +228,38 @@ class TelegramIssueWebhookController {
 
     composeIssueCreatedAcknowledgement(issueId, creationResult, telegramMessage) {
         const reporterLine = this.composeReporterAcknowledgementLine(telegramMessage);
-        const defaultMessage = [
-            `✅ Bug ID: ${issueId}`,
-            reporterLine,
-            "We have received your bug report and will resolve it very soon.",
-            "Thank you for helping us improve KARMM."
-        ].join("\n");
 
-        if (!creationResult) {
-            return defaultMessage;
-        }
+        const sheetStatus  = creationResult && creationResult.sheetCreated  ? "✅ Google Sheet" : "❌ Google Sheet (failed)";
+        const trelloStatus = creationResult && creationResult.trelloCreated ? "✅ Trello"       : "❌ Trello (failed)";
 
-        if (creationResult.sheetCreated && creationResult.trelloCreated) {
-            return defaultMessage;
-        }
+        const allOk = creationResult && creationResult.sheetCreated && creationResult.trelloCreated;
+        const header = allOk
+            ? "✅ Bug report received successfully!"
+            : "⚠️ Bug report received with partial sync.";
 
-        if (creationResult.sheetCreated && !creationResult.trelloCreated) {
-            return [
-                `✅ Bug ID: ${issueId}`,
-                reporterLine,
-                "Your bug was saved to Sheet successfully.",
-                "Trello sync will be retried automatically."
-            ].join("\n");
-        }
+        const lines = [
+            `━━━━━━━━━━━━━━━━━━━━`,
+            `🐛  *KARMM Bug Tracker*`,
+            `━━━━━━━━━━━━━━━━━━━━`,
+            "",
+            header,
+            "",
+            `🔖  *Bug ID:* \`${issueId}\``,
+            `👤  ${reporterLine}`,
+            "",
+            `📦  *Sync Status*`,
+            `    ${sheetStatus}`,
+            `    ${trelloStatus}`,
+            "",
+            `━━━━━━━━━━━━━━━━━━━━`,
+            `📌  Our team has been notified and will`,
+            `    look into this at the earliest.`,
+            "",
+            `💙  Thank you for helping improve KARMM!`,
+            `━━━━━━━━━━━━━━━━━━━━`
+        ];
 
-        if (!creationResult.sheetCreated && creationResult.trelloCreated) {
-            return [
-                `✅ Bug ID: ${issueId}`,
-                reporterLine,
-                "Your bug was saved to Trello successfully.",
-                "Sheet sync will be retried automatically."
-            ].join("\n");
-        }
-
-        return defaultMessage;
+        return lines.join("\n");
     }
 
     composeReporterAcknowledgementLine(telegramMessage) {

@@ -59,7 +59,10 @@ class SheetIssueGateway {
     }
 
     async createIssue(issuePayload) {
-        await this.httpClient.post(this.sheetWebhookUrl, issuePayload);
+        await this.httpClient.post(this.sheetWebhookUrl, {
+            action: "create",
+            ...issuePayload
+        });
     }
 
     async updateIssueChatId(issueId, chatId) {
