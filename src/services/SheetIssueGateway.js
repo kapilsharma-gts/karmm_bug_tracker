@@ -72,6 +72,14 @@ class SheetIssueGateway {
             chatId: chatId
         });
     }
+
+    async updateIssueImage(issueId, imageUrl) {
+        await this.httpClient.post(this.sheetWebhookUrl, {
+            action: "linkimage",
+            id: issueId,
+            image: imageUrl
+        });
+    }
 }
 
 module.exports = SheetIssueGateway;

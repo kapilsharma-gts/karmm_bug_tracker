@@ -79,6 +79,29 @@ class TrelloSyncWebhookController {
                     console.log(`[TrelloSync] Failed to resolve issue ID for card '${card.name}'`);
                 }
             }
+
+            // Sync media if an attachment was just added or it's a new card
+            const attachment = action.data.attachment;
+            if (attachment && attachment.url) {
+                const issueId = await this.resolveIssueId(card);
+                if (issueId) {
+                   await this.sheetGateway.updateIssueImage(issueId, attachment.url);
+                   console.log(`🖼️ Synced Trello attachment for issue ${issueId}`);
+                }
+            }
+        }
+
+        // Specifically handle "addAttachmentToCard" action
+        if (action.type === 'addAttachmentToCard' && action.data.card) {
+            const card = action.data.card;
+            const attachment = action.data.attachment;
+            if (attachment && attachment.url) {
+                const issueId = await this.resolveIssueId(card);
+                if (issueId) {
+                    await this.sheetGateway.updateIssueImage(issueId, attachment.url);
+                    console.log(`🖼️ Synced new Trello attachment for issue ${issueId}`);
+                }
+            }
         }
 
         // Handle card comments/activity if needed

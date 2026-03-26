@@ -166,6 +166,18 @@ function doPost(e) {
       for (let i = 1; i < rows.length; i++) { if (rows[i][0] == data.id) { sheet.getRange(i + 1, col).setValue(data.chatId); return ContentService.createTextOutput("Linked"); } }
     }
 
+    if (data.action === "linkimage") {
+      const colImage = getColumnIndexByHeader(sheet, "Image", 9);
+      const colPreview = getColumnIndexByHeader(sheet, "Preview", 14);
+      for (let i = 1; i < rows.length; i++) {
+        if (rows[i][0] == data.id) {
+          sheet.getRange(i + 1, colImage).setValue(data.image);
+          sheet.getRange(i + 1, colPreview).setFormula(`=IMAGE(I${i + 1})`);
+          return ContentService.createTextOutput("Image Linked");
+        }
+      }
+    }
+
     if (data.action === "assign") {
       for (let i = 1; i < rows.length; i++) { if (rows[i][0] == data.id) { sheet.getRange(i + 1, 12).setValue(data.assignee); return ContentService.createTextOutput("Assigned"); } }
     }

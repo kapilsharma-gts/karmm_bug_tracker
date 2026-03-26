@@ -33,14 +33,38 @@ class DualBackendIssueGateway {
     }
 
     async createIssue(issuePayload) {
-        const settlements = await Promise.allSettled([
-            this.sheetGateway ? this.sheetGateway.createIssue(issuePayload) : Promise.resolve(),
-            this.trelloGateway ? this.trelloGateway.createIssue(issuePayload) : Promise.resolve()
-        ]);
+        let trelloOk = false;
+        let trelloCard = null;
 
-        const [sheetResult, trelloResult] = settlements;
-        const sheetOk = sheetResult.status === "fulfilled";
-        const trelloOk = trelloResult.status === "fulfilled";
+        // Create Trello issue first to get a permanent media URL
+        if (this.trelloGateway) {
+            try {
+                trelloCard = await this.trelloGateway.createIssue(issuePayload);
+                trelloOk = true;
+
+                // Sync: If Trello created an attachment, use ITS URL for the Sheet (since Telegram URLs are temporary)
+                if (issuePayload.image && trelloCard && trelloCard.id) {
+                    // Slight delay to ensure Trello has processed the attachment if needed
+                    const trelloAttachmentUrl = await this.trelloGateway.getCardAttachmentUrl(trelloCard.id);
+                    if (trelloAttachmentUrl) {
+                        issuePayload.image = trelloAttachmentUrl;
+                    }
+                }
+            } catch (error) {
+                console.error("[DualBackend] Trello creation failed:", error.message);
+            }
+        }
+
+        // Now create in Sheet with the permanent URL
+        let sheetOk = false;
+        if (this.sheetGateway) {
+            try {
+                await this.sheetGateway.createIssue(issuePayload);
+                sheetOk = true;
+            } catch (error) {
+                console.error("[DualBackend] Sheet creation failed:", error.message);
+            }
+        }
 
         if (!sheetOk && !trelloOk) {
             throw new Error("Failed to create issue in both Sheet and Trello backends");
